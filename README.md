@@ -44,6 +44,6 @@ Po wykonaniu tej komendy, zbudowane pliki wtyczki znajdą się w katalogu `dist/
 
 3. Kliknij przycisk **Załaduj rozpakowane rozszerzenie** (Load unpacked)
 
-4. Wybierz folder `dist/` (lub `build/`) z projektu
+4. Wybierz folder `dist/` z projektu
 
 5. Wtyczka zostanie załadowana i powinna być aktywna
