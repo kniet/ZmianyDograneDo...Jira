@@ -1,20 +1,24 @@
 {
-  "name": "Taka sobie ZmianyDograneXd",
-  "description": "testt",
+  "name": "ZmianyDograneXd",
+  "description": "Ustawia treść komentarza w zależności od wybranej wersji naprawy ~ KubaBubaa",
   "version": "1.0",
   "manifest_version": 3,
   "permissions": [
     "activeTab",
     "scripting"
   ],
-  "action": {},
+  "action": {
+    "default_icon": "icon.png"
+  },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["js/content.js"]
+      "matches": [
+        "https://jira.coig.com/browse/*"
+      ],
+      "js": ["content.js"]
     }
   ],
   "background": {
-    "service_worker": "js/background.js"
+    "service_worker": "background.js"
   }
 }
