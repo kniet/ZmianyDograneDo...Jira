@@ -27,13 +27,20 @@ const attachFixVersionListener = () => {
 
     attachedElements.add(representation);
 
+    const initialVersions = new Set(
+        Array.from(representation.querySelectorAll(".value-text"))
+            .map(el => el.textContent?.trim() || '')
+    );
+
     const observer = new MutationObserver(() => {
-        const versions = Array.from(
+        const currentVersions = Array.from(
             representation.querySelectorAll(".value-text")
         ).map(el => el.textContent?.trim() || '');
 
-        if (versions.length > 0) {
-            const versionsText = `Zmiany dograne do: ${versions.join(', ')}`;
+        const newVersions = currentVersions.filter(v => !initialVersions.has(v));
+
+        if (newVersions.length > 0) {
+            const versionsText = `Zmiany dograne do: ${newVersions.join(', ')}`;
             setTinyMCEContent(versionsText);
         }
     });
