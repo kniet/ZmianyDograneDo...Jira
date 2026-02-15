@@ -9,7 +9,7 @@
     "outDir": "dist/js",
     "noEmitOnError": true,
     "typeRoots": [ "node_modules/@types" ],
-    "types": ["chrome"]
+    "types": ["chrome", "jest"]
   },
   "include": ["src"]
 }

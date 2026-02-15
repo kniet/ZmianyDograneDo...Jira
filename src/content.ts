@@ -1,7 +1,24 @@
-const attachedElements = new Set<Element>();
-let currentTinyMCEBody: HTMLElement | null = null;
+export const attachedElements = new Set<Element>();
+export let currentTinyMCEBody: HTMLElement | null = null;
 
-const attachTinyMCEListener = (iframe: HTMLIFrameElement) => {
+export const escapeHtml = (text: string): string => {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+};
+
+export const setTinyMCEContent = (text: string) => {
+    if (!currentTinyMCEBody) {
+        return;
+    }
+
+    currentTinyMCEBody.innerHTML = `<p>${escapeHtml(text)}</p>`;
+};
+
+export const attachTinyMCEListener = (iframe: HTMLIFrameElement) => {
     if (attachedElements.has(iframe)) return;
     attachedElements.add(iframe);
 
@@ -21,7 +38,7 @@ const attachTinyMCEListener = (iframe: HTMLIFrameElement) => {
     }
 };
 
-const attachFixVersionListener = () => {
+export const attachFixVersionListener = () => {
     const representation = document.querySelector(".representation ul.items");
     if (!representation || attachedElements.has(representation)) return;
 
@@ -51,15 +68,7 @@ const attachFixVersionListener = () => {
     });
 };
 
-const setTinyMCEContent = (text: string) => {
-    if (!currentTinyMCEBody) {
-        return;
-    }
-
-    currentTinyMCEBody.innerHTML = `<p>${text}</p>`;
-};
-
-const observeForModalElements = () => {
+export const observeForModalElements = () => {
 
     const observer = new MutationObserver(() => {
 
@@ -95,4 +104,13 @@ const observeForModalElements = () => {
     }, 1000);
 };
 
-observeForModalElements();
+export const resetState = () => {
+    attachedElements.clear();
+    currentTinyMCEBody = null;
+};
+
+// Auto-init only in browser context (not in tests)
+declare const __JEST__: boolean | undefined;
+if (typeof __JEST__ === 'undefined') {
+    observeForModalElements();
+}
