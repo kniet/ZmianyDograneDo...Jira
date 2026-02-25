@@ -50,6 +50,33 @@ describe('setTinyMCEContent', () => {
         expect(fakeBody.innerHTML).toBe('<p>Zmiany dograne do: 1.0.0</p>');
     });
 
+    it('restores focus to previously active element', () => {
+        const fakeBody = document.createElement('div');
+        (content as any).currentTinyMCEBody = fakeBody;
+
+        const input = document.createElement('input');
+        document.body.appendChild(input);
+        input.focus();
+        expect(document.activeElement).toBe(input);
+
+        setTinyMCEContent('Zmiany dograne do: 1.0.0');
+
+        expect(document.activeElement).toBe(input);
+    });
+
+    it('dispatches input and change events so TinyMCE registers the change', () => {
+        const fakeBody = document.createElement('div');
+        (content as any).currentTinyMCEBody = fakeBody;
+
+        const events: string[] = [];
+        fakeBody.addEventListener('input', () => events.push('input'));
+        fakeBody.addEventListener('change', () => events.push('change'));
+
+        setTinyMCEContent('Zmiany dograne do: 1.0.0');
+
+        expect(events).toEqual(['input', 'change']);
+    });
+
     it('escapes HTML in version names to prevent XSS', () => {
         const fakeBody = document.createElement('div');
         (content as any).currentTinyMCEBody = fakeBody;

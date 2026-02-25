@@ -15,7 +15,16 @@ export const setTinyMCEContent = (text: string) => {
         return;
     }
 
+    const activeElement = document.activeElement as HTMLElement | null;
+
     currentTinyMCEBody.innerHTML = `<p>${escapeHtml(text)}</p>`;
+
+    currentTinyMCEBody.dispatchEvent(new Event('input', { bubbles: true }));
+    currentTinyMCEBody.dispatchEvent(new Event('change', { bubbles: true }));
+
+    if (activeElement && activeElement !== document.body) {
+        activeElement.focus();
+    }
 };
 
 export const attachTinyMCEListener = (iframe: HTMLIFrameElement) => {
