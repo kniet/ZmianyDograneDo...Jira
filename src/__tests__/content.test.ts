@@ -2,6 +2,8 @@ import {
     escapeHtml,
     setTinyMCEContent,
     attachTinyMCEListener,
+    attachRichEditorListener,
+    attachWikiTextareaListener,
     attachFixVersionListener,
     attachedElements,
     resetState,
@@ -88,6 +90,91 @@ describe('setTinyMCEContent', () => {
         // Verify no actual img element was created
         expect(fakeBody.querySelector('img')).toBeNull();
     });
+
+    it('also updates the wiki-markup textarea used by the "Tekst" view', () => {
+        const fakeBody = document.createElement('div');
+        (content as any).currentTinyMCEBody = fakeBody;
+
+        const textarea = document.createElement('textarea');
+        (content as any).currentWikiTextarea = textarea;
+
+        const events: string[] = [];
+        textarea.addEventListener('input', () => events.push('input'));
+        textarea.addEventListener('change', () => events.push('change'));
+
+        setTinyMCEContent('Zmiany dograne do: 1.0.0');
+
+        expect(textarea.value).toBe('Zmiany dograne do: 1.0.0');
+        expect(events).toEqual(['input', 'change']);
+    });
+
+    it('does not touch the wiki textarea when none is known', () => {
+        const fakeBody = document.createElement('div');
+        (content as any).currentTinyMCEBody = fakeBody;
+        (content as any).currentWikiTextarea = null;
+
+        expect(() => setTinyMCEContent('Zmiany dograne do: 1.0.0')).not.toThrow();
+    });
+
+    it('updates the <rich-editor> custom element (the actual visible "Wizualny" surface)', () => {
+        const richEditor = document.createElement('rich-editor');
+        (content as any).currentRichEditor = richEditor;
+
+        const events: string[] = [];
+        richEditor.addEventListener('input', () => events.push('input'));
+        richEditor.addEventListener('change', () => events.push('change'));
+
+        setTinyMCEContent('Zmiany dograne do: 1.0.0');
+
+        expect(richEditor.innerHTML).toBe('<p>Zmiany dograne do: 1.0.0</p>');
+        expect(events).toEqual(['input', 'change']);
+    });
+
+    it('works when only the rich editor is known (no legacy iframe, no wiki textarea)', () => {
+        const richEditor = document.createElement('rich-editor');
+        (content as any).currentRichEditor = richEditor;
+        (content as any).currentTinyMCEBody = null;
+        (content as any).currentWikiTextarea = null;
+
+        setTinyMCEContent('Zmiany dograne do: 1.0.0');
+
+        expect(richEditor.innerHTML).toBe('<p>Zmiany dograne do: 1.0.0</p>');
+    });
+});
+
+describe('attachRichEditorListener', () => {
+    it('finds the rich-editor custom element scoped to the open dialog', () => {
+        const dialog = document.createElement('div');
+        dialog.className = 'jira-dialog';
+        const richEditor = document.createElement('rich-editor');
+        richEditor.id = 'mce_0';
+        dialog.appendChild(richEditor);
+        document.body.appendChild(dialog);
+
+        attachRichEditorListener();
+
+        expect((content as any).currentRichEditor).toBe(richEditor);
+    });
+
+    it('ignores a same-tagged element outside the open dialog', () => {
+        const dialog = document.createElement('div');
+        dialog.className = 'jira-dialog';
+        document.body.appendChild(dialog);
+
+        // Simulates a rich-editor belonging to the issue page behind the modal
+        const backgroundRichEditor = document.createElement('rich-editor');
+        backgroundRichEditor.id = 'mce_1';
+        document.body.appendChild(backgroundRichEditor);
+
+        attachRichEditorListener();
+
+        expect((content as any).currentRichEditor).toBeNull();
+    });
+
+    it('does nothing when no rich-editor exists', () => {
+        expect(() => attachRichEditorListener()).not.toThrow();
+        expect((content as any).currentRichEditor).toBeNull();
+    });
 });
 
 describe('attachTinyMCEListener', () => {
@@ -123,6 +210,40 @@ describe('attachTinyMCEListener', () => {
         attachTinyMCEListener(iframe);
         // Should still be the marker, not overwritten
         expect((content as any).currentTinyMCEBody).toBe(marker);
+    });
+
+});
+
+describe('attachWikiTextareaListener', () => {
+    it('finds the wiki-markup textarea even when no TinyMCE iframe exists yet', () => {
+        // Simulates the dialog opening directly in "Tekst" view: TinyMCE
+        // (and its iframe) hasn't been lazily created yet.
+        const textarea = document.createElement('textarea');
+        textarea.className = 'wiki-textfield';
+        textarea.id = 'comment';
+        document.body.appendChild(textarea);
+
+        attachWikiTextareaListener();
+
+        expect((content as any).currentWikiTextarea).toBe(textarea);
+    });
+
+    it('does nothing when no wiki textarea exists on the page', () => {
+        expect(() => attachWikiTextareaListener()).not.toThrow();
+        expect((content as any).currentWikiTextarea).toBeNull();
+    });
+
+    it('does not re-process an already attached textarea', () => {
+        const textarea = document.createElement('textarea');
+        textarea.className = 'wiki-textfield';
+        document.body.appendChild(textarea);
+
+        attachWikiTextareaListener();
+        const marker = document.createElement('textarea');
+        (content as any).currentWikiTextarea = marker;
+
+        attachWikiTextareaListener();
+        expect((content as any).currentWikiTextarea).toBe(marker);
     });
 });
 
@@ -215,5 +336,62 @@ describe('attachFixVersionListener', () => {
 
         // Should only contain the new version
         expect(fakeBody.innerHTML).toBe('<p>Zmiany dograne do: 3.0.0</p>');
+    });
+
+    it('re-triggers when a version already present at attach time is removed and re-added', async () => {
+        const fakeBody = document.createElement('div');
+        (content as any).currentTinyMCEBody = fakeBody;
+
+        // "Trunk" is already selected when the dialog opens
+        const { ul } = setupDom(['Trunk']);
+
+        attachFixVersionListener();
+
+        // Remove Trunk
+        ul.removeChild(ul.firstElementChild!);
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        // Comment should not have been touched by the removal
+        expect(fakeBody.innerHTML).toBe('');
+
+        // Re-add Trunk
+        const li = document.createElement('li');
+        const span = document.createElement('span');
+        span.className = 'value-text';
+        span.textContent = 'Trunk';
+        li.appendChild(span);
+        ul.appendChild(li);
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(fakeBody.innerHTML).toBe('<p>Zmiany dograne do: Trunk</p>');
+    });
+
+    it('accumulates multiple separately-added versions in one comma-separated comment', async () => {
+        const fakeBody = document.createElement('div');
+        (content as any).currentTinyMCEBody = fakeBody;
+
+        const { ul } = setupDom([]);
+
+        attachFixVersionListener();
+
+        const addVersion = async (v: string) => {
+            const li = document.createElement('li');
+            const span = document.createElement('span');
+            span.className = 'value-text';
+            span.textContent = v;
+            li.appendChild(span);
+            ul.appendChild(li);
+            await new Promise(resolve => setTimeout(resolve, 0));
+        };
+
+        await addVersion('1.0.0');
+        expect(fakeBody.innerHTML).toBe('<p>Zmiany dograne do: 1.0.0</p>');
+
+        await addVersion('2.0.0');
+        expect(fakeBody.innerHTML).toBe('<p>Zmiany dograne do: 1.0.0, 2.0.0</p>');
+
+        await addVersion('3.0.0');
+        expect(fakeBody.innerHTML).toBe('<p>Zmiany dograne do: 1.0.0, 2.0.0, 3.0.0</p>');
     });
 });

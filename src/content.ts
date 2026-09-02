@@ -1,5 +1,13 @@
 export const attachedElements = new Set<Element>();
+// Legacy TinyMCE iframe body. Kept as a defensive fallback — on this Jira
+// instance the iframe under #mceu_* is actually `display: none` (dead markup)
+// and the real "Wizualny" surface is the <rich-editor> custom element below,
+// but other fields/versions may still rely on the classic iframe.
 export let currentTinyMCEBody: HTMLElement | null = null;
+// The visible "Wizualny" editing surface: a contenteditable custom element
+// (<rich-editor id="mce_0">) that replaced the legacy TinyMCE iframe.
+export let currentRichEditor: HTMLElement | null = null;
+export let currentWikiTextarea: HTMLTextAreaElement | null = null;
 
 export const escapeHtml = (text: string): string => {
     return text
@@ -10,17 +18,35 @@ export const escapeHtml = (text: string): string => {
         .replace(/'/g, '&#039;');
 };
 
+// Scope element lookups to the open workflow-transition dialog so we never
+// pick up a same-classed field belonging to the issue page behind it.
+const getDialogScope = (): ParentNode => document.querySelector('.jira-dialog') || document;
+
 export const setTinyMCEContent = (text: string) => {
-    if (!currentTinyMCEBody) {
+    if (!currentTinyMCEBody && !currentRichEditor && !currentWikiTextarea) {
         return;
     }
 
     const activeElement = document.activeElement as HTMLElement | null;
+    const html = `<p>${escapeHtml(text)}</p>`;
 
-    currentTinyMCEBody.innerHTML = `<p>${escapeHtml(text)}</p>`;
+    if (currentTinyMCEBody) {
+        currentTinyMCEBody.innerHTML = html;
+        currentTinyMCEBody.dispatchEvent(new Event('input', { bubbles: true }));
+        currentTinyMCEBody.dispatchEvent(new Event('change', { bubbles: true }));
+    }
 
-    currentTinyMCEBody.dispatchEvent(new Event('input', { bubbles: true }));
-    currentTinyMCEBody.dispatchEvent(new Event('change', { bubbles: true }));
+    if (currentRichEditor) {
+        currentRichEditor.innerHTML = html;
+        currentRichEditor.dispatchEvent(new Event('input', { bubbles: true }));
+        currentRichEditor.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    if (currentWikiTextarea) {
+        currentWikiTextarea.value = text;
+        currentWikiTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+        currentWikiTextarea.dispatchEvent(new Event('change', { bubbles: true }));
+    }
 
     if (activeElement && activeElement !== document.body) {
         activeElement.focus();
@@ -47,13 +73,36 @@ export const attachTinyMCEListener = (iframe: HTMLIFrameElement) => {
     }
 };
 
+// The <rich-editor> custom element exists in the DOM as soon as the dialog
+// opens (it's not lazily created like the legacy iframe was).
+export const attachRichEditorListener = () => {
+    const richEditor = getDialogScope().querySelector<HTMLElement>('rich-editor[id^="mce_"]');
+    if (!richEditor || attachedElements.has(richEditor)) return;
+
+    attachedElements.add(richEditor);
+    currentRichEditor = richEditor;
+};
+
+// The "Tekst" (wiki markup) textarea exists in the DOM as soon as the dialog
+// opens, independently of whether the TinyMCE iframe has been created yet —
+// Jira only creates the iframe lazily, the first time "Wizualny" is opened.
+export const attachWikiTextareaListener = () => {
+    const textarea = getDialogScope().querySelector<HTMLTextAreaElement>('textarea.wiki-textfield');
+    if (!textarea || attachedElements.has(textarea)) return;
+
+    attachedElements.add(textarea);
+    currentWikiTextarea = textarea;
+};
+
 export const attachFixVersionListener = () => {
-    const representation = document.querySelector(".representation ul.items");
+    const representation = getDialogScope().querySelector(".representation ul.items");
     if (!representation || attachedElements.has(representation)) return;
 
     attachedElements.add(representation);
 
-    const initialVersions = new Set(
+    // Versions present when the dialog opened. A baseline version is evicted
+    // as soon as it's removed, so re-adding it later is treated as new again.
+    const baseline = new Set(
         Array.from(representation.querySelectorAll(".value-text"))
             .map(el => el.textContent?.trim() || '')
     );
@@ -63,7 +112,12 @@ export const attachFixVersionListener = () => {
             representation.querySelectorAll(".value-text")
         ).map(el => el.textContent?.trim() || '');
 
-        const newVersions = currentVersions.filter(v => !initialVersions.has(v));
+        const currentSet = new Set(currentVersions);
+        baseline.forEach(v => {
+            if (!currentSet.has(v)) baseline.delete(v);
+        });
+
+        const newVersions = currentVersions.filter(v => !baseline.has(v));
 
         if (newVersions.length > 0) {
             const versionsText = `Zmiany dograne do: ${newVersions.join(', ')}`;
@@ -96,6 +150,8 @@ export const observeForModalElements = () => {
             }
         });
 
+        attachRichEditorListener();
+        attachWikiTextareaListener();
         attachFixVersionListener();
     });
 
@@ -109,6 +165,8 @@ export const observeForModalElements = () => {
 
         iframes.forEach(attachTinyMCEListener);
 
+        attachRichEditorListener();
+        attachWikiTextareaListener();
         attachFixVersionListener();
     }, 1000);
 };
@@ -116,6 +174,8 @@ export const observeForModalElements = () => {
 export const resetState = () => {
     attachedElements.clear();
     currentTinyMCEBody = null;
+    currentRichEditor = null;
+    currentWikiTextarea = null;
 };
 
 // Auto-init only in browser context (not in tests)
