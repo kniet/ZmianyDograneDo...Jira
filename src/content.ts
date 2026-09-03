@@ -1,11 +1,5 @@
 export const attachedElements = new Set<Element>();
-// Legacy TinyMCE iframe body. Kept as a defensive fallback — on this Jira
-// instance the iframe under #mceu_* is actually `display: none` (dead markup)
-// and the real "Wizualny" surface is the <rich-editor> custom element below,
-// but other fields/versions may still rely on the classic iframe.
 export let currentTinyMCEBody: HTMLElement | null = null;
-// The visible "Wizualny" editing surface: a contenteditable custom element
-// (<rich-editor id="mce_0">) that replaced the legacy TinyMCE iframe.
 export let currentRichEditor: HTMLElement | null = null;
 export let currentWikiTextarea: HTMLTextAreaElement | null = null;
 
@@ -18,8 +12,6 @@ export const escapeHtml = (text: string): string => {
         .replace(/'/g, '&#039;');
 };
 
-// Scope element lookups to the open workflow-transition dialog so we never
-// pick up a same-classed field belonging to the issue page behind it.
 const getDialogScope = (): ParentNode => document.querySelector('.jira-dialog') || document;
 
 export const setTinyMCEContent = (text: string) => {
@@ -73,8 +65,6 @@ export const attachTinyMCEListener = (iframe: HTMLIFrameElement) => {
     }
 };
 
-// The <rich-editor> custom element exists in the DOM as soon as the dialog
-// opens (it's not lazily created like the legacy iframe was).
 export const attachRichEditorListener = () => {
     const richEditor = getDialogScope().querySelector<HTMLElement>('rich-editor[id^="mce_"]');
     if (!richEditor || attachedElements.has(richEditor)) return;
@@ -83,9 +73,6 @@ export const attachRichEditorListener = () => {
     currentRichEditor = richEditor;
 };
 
-// The "Tekst" (wiki markup) textarea exists in the DOM as soon as the dialog
-// opens, independently of whether the TinyMCE iframe has been created yet —
-// Jira only creates the iframe lazily, the first time "Wizualny" is opened.
 export const attachWikiTextareaListener = () => {
     const textarea = getDialogScope().querySelector<HTMLTextAreaElement>('textarea.wiki-textfield');
     if (!textarea || attachedElements.has(textarea)) return;
@@ -100,8 +87,6 @@ export const attachFixVersionListener = () => {
 
     attachedElements.add(representation);
 
-    // Versions present when the dialog opened. A baseline version is evicted
-    // as soon as it's removed, so re-adding it later is treated as new again.
     const baseline = new Set(
         Array.from(representation.querySelectorAll(".value-text"))
             .map(el => el.textContent?.trim() || '')
@@ -178,7 +163,6 @@ export const resetState = () => {
     currentWikiTextarea = null;
 };
 
-// Auto-init only in browser context (not in tests)
 declare const __JEST__: boolean | undefined;
 if (typeof __JEST__ === 'undefined') {
     observeForModalElements();
